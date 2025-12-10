@@ -16,15 +16,7 @@ import torchvision.transforms.transforms as transforms
 app = Flask(__name__)
 
 EMOJI_FOLDER = r'emoji'
-EMOTION_LABELS = {
-    0: 'Angry',
-    1: 'Disgust',
-    2: 'Fear',
-    3: 'Happy',
-    4: 'Sad',
-    5: 'Surprise',
-    6: 'Neutral'
-}
+EMOTION_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 
 # 初始化变量
 emojis = []
@@ -53,7 +45,7 @@ def init_resources():
     # 加载emoji图片
     emojis = []
     if os.path.exists(EMOJI_FOLDER):
-        for emotion in EMOTION_LABELS.values():
+        for emotion in EMOTION_LABELS:
             emoji_path = os.path.join(EMOJI_FOLDER, f"{emotion}.png")
             if os.path.exists(emoji_path):
                 emoji = cv2.imread(emoji_path, cv2.IMREAD_UNCHANGED)
