@@ -18,7 +18,7 @@ class dlibLandmarks(LandmarksDetectorIface):
 
     def convert_to_numpy(self, landmarks):
         num_landmarks = 5
-        coords = np.zeros((num_landmarks, 2), dtype=np.int)
+        coords = np.zeros((num_landmarks, 2), dtype=int)
         for i in range(num_landmarks):
             coords[i] = (landmarks.part(i).x, landmarks.part(i).y)
         return coords

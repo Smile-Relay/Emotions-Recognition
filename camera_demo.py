@@ -11,7 +11,7 @@ import argparse
 import cv2
 import numpy as np
 import torch
-from numpy.lib.type_check import imag
+from numpy import imag
 import torch
 from torch.functional import norm
 import torchvision.transforms.transforms as transforms
