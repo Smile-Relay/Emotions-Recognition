@@ -1,32 +1,38 @@
 import sys
+import os
+import time
 
 import cv2
 import numpy as np
-import os
-
 import torch
-from flask import Flask, Response
+from flask import Flask, Response, request
+from flask_cors import CORS
 from camera_init import init_camera, release_camera, read_frame
 from face_alignment.face_alignment import FaceAlignment
 from face_detector.face_detector import DnnDetector
 from model.model import Mini_Xception
-from utils import histogram_equalization, get_label_emotion
-import torchvision.transforms.transforms as transforms
+from utils import histogram_equalization
+from torchvision import transforms
+import threading
+import base64
 
 app = Flask(__name__)
+CORS(app, origins=["*"])
 
 EMOJI_FOLDER = r'emoji'
 EMOTION_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
+PHOTOS_FOLDER = r'photos'
 
-# 初始化变量
-emojis = []
+# 全局变量
+emojis = {}
 cap = None
+cap_lock = threading.Lock()
 pretrained = 'checkpoint/model_weights/weights_epoch_75.pth.tar'
 face_detector = None
 face_alignment = None
 device = None
 mini_xception = None
-
+theme = "Apple"
 
 def init_resources():
     """初始化所有资源"""
@@ -34,95 +40,102 @@ def init_resources():
 
     sys.path.insert(1, 'face_detector')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     checkpoint = torch.load(pretrained, map_location=device)
     mini_xception = Mini_Xception().to(device)
-    mini_xception.eval()
     mini_xception.load_state_dict(checkpoint['mini_xception'])
-    face_alignment = FaceAlignment()
+    mini_xception.eval()
 
+    face_alignment = FaceAlignment()
     face_detector = DnnDetector('face_detector')
 
+    if not os.path.exists(PHOTOS_FOLDER):
+        os.makedirs(PHOTOS_FOLDER)
+
     # 加载emoji图片
-    emojis = []
+    emojis.clear()
     if os.path.exists(EMOJI_FOLDER):
-        for emotion in EMOTION_LABELS:
-            emoji_path = os.path.join(EMOJI_FOLDER, f"{emotion}.png")
-            if os.path.exists(emoji_path):
-                emoji = cv2.imread(emoji_path, cv2.IMREAD_UNCHANGED)
-                if emoji is not None:
-                    emojis.append(emoji)
+        for t in os.listdir(EMOJI_FOLDER):
+            theme_path = os.path.join(EMOJI_FOLDER, t)
+            if not os.path.isdir(theme_path):
+                continue
+            emojis[t] = []
+            for emotion in EMOTION_LABELS:
+                emoji_path = os.path.join(theme_path, f"{emotion}.png")
+                if os.path.exists(emoji_path):
+                    emoji = cv2.imread(emoji_path, cv2.IMREAD_UNCHANGED)
+                    if emoji is not None:
+                        emojis[t].append(emoji)
+                    else:
+                        emojis[t].append(np.zeros((48, 48, 4), dtype=np.uint8))
                 else:
-                    # 使用默认表情
-                    emojis.append(np.zeros((48, 48, 4), dtype=np.uint8))
-            else:
-                emojis.append(np.zeros((48, 48, 4), dtype=np.uint8))
-    else:
-        # 如果emoji文件夹不存在，创建空的emoji数组
-        emojis = [np.zeros((48, 48, 4), dtype=np.uint8) for _ in EMOTION_LABELS]
+                    emojis[t].append(np.zeros((48, 48, 4), dtype=np.uint8))
 
     # 初始化摄像头
+    global cap
     cap = init_camera()
+
+
+@app.route('/set_theme')
+def set_theme():
+    global theme
+    new_theme = request.args.get('theme')
+    if new_theme is None:
+        return Response("Bad request", status=400)
+    if new_theme not in emojis:
+        return Response("Theme not found", status=404)
+    theme = new_theme
+    return Response("OK")
+
+@app.route('/get_theme')
+def get_theme():
+    global theme
+    return Response(theme)
 
 
 def generate_frames():
     """生成视频流帧"""
-    global cap
+    global cap, theme
 
-    # 确保资源已初始化
     if cap is None:
         init_resources()
 
+    softmax = torch.nn.Softmax(dim=1)
+    transform = transforms.ToTensor()
+
     while True:
         try:
-            # 读取帧
-            ret, frame = read_frame()
+            with cap_lock:
+                ret, frame = read_frame()
             if not ret:
-                # 如果读取失败，尝试重新打开摄像头
-                release_camera()
-                init_camera()
+                with cap_lock:
+                    release_camera()
+                    cap = init_camera()
                 continue
 
             faces = face_detector.detect_faces(frame)
 
-
             for (x, y, w, h) in faces:
-
                 input_face = face_alignment.frontalize_face((x, y, w, h), frame)
                 input_face = cv2.resize(input_face, (48, 48))
-
                 input_face = histogram_equalization(input_face)
-
-                input_face = transforms.ToTensor()(input_face).to(device)
-                input_face = torch.unsqueeze(input_face, 0)
+                input_face = transform(input_face).unsqueeze(0).to(device)
 
                 with torch.no_grad():
-                    input_face = input_face.to(device)
-                    emotion = mini_xception(input_face)
-                    # print(f'\ntime={(time.time()-t) * 1000 } ms')
+                    outputs = mini_xception(input_face)
+                    emotion_idx = torch.argmax(outputs, dim=1).item()
 
-                    torch.set_printoptions(precision=6)
-                    softmax = torch.nn.Softmax()
-                    emotions_soft = softmax(emotion.squeeze()).reshape(-1, 1).cpu().detach().numpy()
-                    emotions_soft = np.round(emotions_soft, 3)
-
-                    emotion = torch.argmax(emotion)
-                    emotion_idx = emotion.squeeze().cpu().detach().item()
-
-                    if emojis[emotion_idx] is not None and emojis[emotion_idx].size > 0:
-                        emoji = cv2.resize(emojis[emotion_idx], (w, h))
-
-                        # 确保emoji有alpha通道
-                        if emoji.shape[2] == 4:
-                            # 叠加emoji（带透明度）
-                            alpha_emoji = emoji[:, :, 3] / 255.0
+                if theme in emojis and len(emojis[theme]) > emotion_idx:
+                    emoji = emojis[theme][emotion_idx]
+                    if emoji is not None and emoji.size > 0:
+                        emoji_resized = cv2.resize(emoji, (w, h))
+                        if emoji_resized.shape[2] == 4:
+                            alpha_emoji = emoji_resized[:, :, 3] / 255.0
                             alpha_frame = 1.0 - alpha_emoji
+                            for c in range(3):
+                                frame[y:y+h, x:x+w, c] = (emoji_resized[:, :, c] * alpha_emoji +
+                                                          frame[y:y+h, x:x+w, c] * alpha_frame)
 
-                            for c in range(0, 3):
-                                frame[y:y + h, x:x + w, c] = (emoji[:, :, c] * alpha_emoji +
-                                                              frame[y:y + h, x:x + w, c] * alpha_frame)
-
-
-            # 编码为JPEG
             ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
             if not ret:
                 continue
@@ -132,39 +145,46 @@ def generate_frames():
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
         except Exception as e:
-            # 捕获所有异常，确保视频流不中断
             print(f"Error in frame generation: {e}")
             continue
 
 
 @app.route('/video_feed')
 def video_feed():
-    """视频流路由"""
     return Response(generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/take_photo', methods=['POST'])
+def take_photo():
+    photo_base64 = request.get_json().get("image")
+    if photo_base64 is None:
+        return Response("Bad request", status=400)
+    if photo_base64.startswith("data:image"):
+        photo_base64 = photo_base64.split(",")[1]
+
+    decoded_bytes = base64.b64decode(photo_base64)
+    with open(os.path.join(PHOTOS_FOLDER, f"{time.time()}.png"), "wb") as f:
+        f.write(decoded_bytes)
+    return "OK"
 
 
 @app.teardown_appcontext
 def cleanup(exception):
-    """应用关闭时清理资源"""
     global cap
-    if cap is not None:
-        release_camera()
+    with cap_lock:
+        if cap is not None:
+            release_camera()
     cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
     try:
-        # 初始化资源
         init_resources()
-
-        # 启动Flask应用
         app.run(host='0.0.0.0', port=5001, threaded=True, debug=False)
-
     except Exception as e:
         print(f"Error starting application: {e}")
     finally:
-        # 确保资源释放
-        if cap is not None:
-            release_camera()
+        with cap_lock:
+            if cap is not None:
+                release_camera()
         cv2.destroyAllWindows()
