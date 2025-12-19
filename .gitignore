@@ -136,3 +136,4 @@ dmypy.json
 
 /camera_init.py
 /photos/*
+/bottles.db

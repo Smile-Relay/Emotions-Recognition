@@ -10,6 +10,10 @@ from model.model import Mini_Xception
 from utils import histogram_equalization
 from torchvision import transforms
 import threading
+import random
+
+from db_models import Bottle, db
+from vocabularies import ADJECTIVES, NOUNS, get_by_hex
 
 app = Flask(__name__)
 CORS(app, origins=["*"])
@@ -86,9 +90,51 @@ def detect():
     except Exception as e:
         return Response(f"Error in emotion detection: {e}", status=500)
 
+@app.route('/vocabularies')
+def vocabularies():
+    return {
+        "adjectives": ADJECTIVES,
+        "nouns": NOUNS
+    }
+
+@app.route('/random_vocabulary')
+def random_vocabulary():
+    res = f"{random.randint(0, 255):02X}"
+    while Bottle.select().where(Bottle.id == res).exists():
+        res = f"{random.randint(0, 255):02X}"
+    return {
+        "id": res,
+        "vocabulary": get_by_hex(res)
+    }
+
+
 @app.route("/throw", methods=['POST'])
 def throw():
-    pass
+    emotion = request.get_json().get("emotion")
+    feeling = request.get_json().get("feeling")
+    passage = request.get_json().get("passage")
+    hex_id = request.get_json().get("id")
+    if emotion is None:
+        return "Bad request", 400
+    if feeling is None:
+        return "Bad request", 400
+    if passage is None:
+        return "Bad request", 400
+    if hex_id is None:
+        return "Bad request", 400
+    try:
+        if int(hex_id, 16) > 255 or int(hex_id, 16) < 0:
+            return "Bad request", 400
+    except ValueError as e:
+        return "Bad request", 400
+    bottle = Bottle.create(
+        id=hex_id,
+        emotion=emotion,
+        feeling=feeling,
+        passage=passage,
+    )
+    bottle.save()
+    return "OK"
 
 @app.teardown_appcontext
 def cleanup(exception):
