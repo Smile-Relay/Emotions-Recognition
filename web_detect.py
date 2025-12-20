@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime, timedelta
 
 import cv2
 import peewee
@@ -39,6 +40,11 @@ mini_xception = None
 theme = "Apple"
 task_queue = AsyncTaskQueue()
 
+def clear_expired_bottle():
+    twenty_four_hours_ago = datetime.now() - timedelta(hours=24)
+    query = Bottle.select().where(Bottle.created_at <= twenty_four_hours_ago)
+    if query.count() > 0:
+        query.delete().execute()
 def init_resources():
     """初始化所有资源"""
     global cap, face_detector, face_alignment, device, mini_xception
@@ -115,6 +121,7 @@ def random_vocabulary():
 
 @app.route('/random_id')
 def random_id():
+    clear_expired_bottle()
     query = Bottle.select().order_by(peewee.fn.Random()).limit(1)
     item = query.first()
     if item is None:
@@ -123,6 +130,7 @@ def random_id():
 
 @app.route('/get_bottle/<string:id>')
 def get_bottle(id: str):
+    clear_expired_bottle()
     query = Bottle.select().where(Bottle.id == id)
     item = query.first()
     if item is None:
@@ -133,6 +141,7 @@ def get_bottle(id: str):
 
 async def add_bottle(emotion: str, feeling: str, passage: str, hex_id: str):
     print(f"Generating {hex_id}")
+    clear_expired_bottle()
     bottle = Bottle.create(
         id=hex_id,
         emotion=emotion,
@@ -145,6 +154,7 @@ async def add_bottle(emotion: str, feeling: str, passage: str, hex_id: str):
 
 @app.route('/comment/<string:id>')
 def comment(id: str):
+    clear_expired_bottle()
     query = Bottle.select().where(Bottle.id == id)
     item = query.first()
     comment_type = request.args.get('type')
