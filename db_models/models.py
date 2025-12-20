@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from peewee import SqliteDatabase, Model, CharField, TextField, Check, DateTimeField
+from peewee import SqliteDatabase, Model, CharField, TextField, Check, DateTimeField, IntegerField
 import re
 
 db = SqliteDatabase('bottles.db')
@@ -21,12 +21,13 @@ class Bottle(BaseModel):
         ]
     )
 
-    emotion = CharField(max_length=50, null=False)
-
-    feeling = CharField(max_length=50, null=False)
-
+    emotion = CharField(max_length=10, null=False)
+    feeling = CharField(max_length=10, null=False)
     passage = TextField(null=False)
-
+    img_url = TextField(null=False)
+    flowers = IntegerField(default=0)
+    hugs = IntegerField(default=0)
+    likes = IntegerField(default=0)
     created_at = DateTimeField(default=datetime.now)
 
     class Meta:

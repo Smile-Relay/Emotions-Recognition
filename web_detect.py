@@ -1,8 +1,13 @@
 import sys
+
 import cv2
+import peewee
 import torch
 from flask import Flask, Response, request
 from flask_cors import CORS
+
+from AsyncTaskQueue import AsyncTaskQueue
+from T2I import generate
 from camera_init import init_camera, release_camera, read_frame
 from face_alignment.face_alignment import FaceAlignment
 from face_detector.face_detector import DnnDetector
@@ -12,7 +17,7 @@ from torchvision import transforms
 import threading
 import random
 
-from db_models import Bottle, db
+from db_models import Bottle
 from vocabularies import ADJECTIVES, NOUNS, get_by_hex
 
 app = Flask(__name__)
@@ -32,6 +37,7 @@ face_alignment = None
 device = None
 mini_xception = None
 theme = "Apple"
+task_queue = AsyncTaskQueue()
 
 def init_resources():
     """初始化所有资源"""
@@ -107,6 +113,54 @@ def random_vocabulary():
         "vocabulary": get_by_hex(res)
     }
 
+@app.route('/random_id')
+def random_id():
+    query = Bottle.select().order_by(peewee.fn.Random()).limit(1)
+    item = query.first()
+    if item is None:
+        return "There are not any bottle", 404
+    return item.id
+
+@app.route('/get_bottle/<string:id>')
+def get_bottle(id: str):
+    query = Bottle.select().where(Bottle.id == id)
+    item = query.first()
+    if item is None:
+        return "Bottle not found", 404
+    return item.__data__
+
+
+
+async def add_bottle(emotion: str, feeling: str, passage: str, hex_id: str):
+    print(f"Generating {hex_id}")
+    bottle = Bottle.create(
+        id=hex_id,
+        emotion=emotion,
+        feeling=feeling,
+        passage=passage,
+        img_url=await generate(f"人物感受:{feeling}, 描述:{passage}生成没有性别特征的简笔画手绘风人物涂鸦")
+    )
+    bottle.save()
+    print(f"saved bottle: {hex_id}")
+
+@app.route('/comment/<string:id>')
+def comment(id: str):
+    query = Bottle.select().where(Bottle.id == id)
+    item = query.first()
+    comment_type = request.args.get('type')
+    if comment_type not in ["like", "hug", "flower"]:
+        return "Bad request", 400
+    if not item:
+        return "Bottle not found", 404
+    if comment_type == "like":
+        item.likes += 1
+    if comment_type == "hug":
+        item.hugs += 1
+    if comment_type == "flower":
+        item.flowers += 1
+    item.save()
+    return "OK"
+
 
 @app.route("/throw", methods=['POST'])
 def throw():
@@ -125,15 +179,9 @@ def throw():
     try:
         if int(hex_id, 16) > 255 or int(hex_id, 16) < 0:
             return "Bad request", 400
-    except ValueError as e:
+    except ValueError:
         return "Bad request", 400
-    bottle = Bottle.create(
-        id=hex_id,
-        emotion=emotion,
-        feeling=feeling,
-        passage=passage,
-    )
-    bottle.save()
+    task_queue.add_task(add_bottle(emotion, feeling, passage, hex_id))
     return "OK"
 
 @app.teardown_appcontext
