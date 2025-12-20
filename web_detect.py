@@ -37,14 +37,11 @@ face_detector = None
 face_alignment = None
 device = None
 mini_xception = None
-theme = "Apple"
 task_queue = AsyncTaskQueue()
 
 def clear_expired_bottle():
     twenty_four_hours_ago = datetime.now() - timedelta(hours=24)
-    query = Bottle.select().where(Bottle.created_at <= twenty_four_hours_ago)
-    if query.count() > 0:
-        query.delete().execute()
+    Bottle.delete().where(Bottle.created_at <= twenty_four_hours_ago).execute()
 def init_resources():
     """初始化所有资源"""
     global cap, face_detector, face_alignment, device, mini_xception
