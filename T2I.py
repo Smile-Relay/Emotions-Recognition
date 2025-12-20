@@ -1,6 +1,6 @@
 import aiohttp
 
-from secrets import T2I_API_KEY, T2I_URL, T2I_MODEL
+from secret import T2I_API_KEY, T2I_URL, T2I_MODEL
 
 
 async def generate(prompt: str) -> str:
