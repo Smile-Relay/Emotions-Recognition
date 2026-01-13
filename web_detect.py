@@ -7,8 +7,6 @@ import torch
 from flask import Flask, Response, request
 from flask_cors import CORS
 
-from AsyncTaskQueue import AsyncTaskQueue
-from T2I import generate
 from camera_init import init_camera, release_camera, read_frame
 from face_alignment.face_alignment import FaceAlignment
 from face_detector.face_detector import DnnDetector
@@ -27,6 +25,9 @@ CORS(app, origins=["*"])
 EMOJI_FOLDER = r'emoji'
 EMOTION_LABELS = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 PHOTOS_FOLDER = r'photos'
+genderProto = "gender_deploy.prototxt"
+genderModel = "gender_net.caffemodel"
+MODEL_MEAN_VALUES=(78.4263377603, 87.7689143744, 114.895847746)
 
 # 全局变量
 emojis = {}
@@ -37,15 +38,15 @@ face_detector = None
 face_alignment = None
 device = None
 mini_xception = None
-task_queue = AsyncTaskQueue()
+gender_model = None
 
 def clear_expired_bottle():
     twenty_four_hours_ago = datetime.now() - timedelta(hours=24)
     Bottle.delete().where(Bottle.created_at <= twenty_four_hours_ago).execute()
+
 def init_resources():
     """初始化所有资源"""
-    global cap, face_detector, face_alignment, device, mini_xception
-
+    global cap, face_detector, face_alignment, device, mini_xception, gender_model
     sys.path.insert(1, 'face_detector')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -56,6 +57,8 @@ def init_resources():
 
     face_alignment = FaceAlignment()
     face_detector = DnnDetector('face_detector')
+
+    gender_model = cv2.dnn.readNet(genderModel,genderProto)
 
     # 初始化摄像头
     global cap
@@ -83,19 +86,26 @@ def detect():
         faces = face_detector.detect_faces(frame)
         if not faces:
             return Response("No face detected", status=404)
-
-        (x, y, w, h) = max(faces, key=lambda x: x[2] * x[3])
-        input_face = face_alignment.frontalize_face((x, y, w, h), frame)
+        faceBox = max(faces, key=lambda x: x[2] * x[3])
+        input_face = face_alignment.frontalize_face(faceBox, frame)
+        face = frame[faceBox[1]:faceBox[3] + faceBox[1], faceBox[0]:faceBox[2] + faceBox[0]]
+        blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
+        input_face = cv2.cvtColor(input_face, cv2.COLOR_BGR2GRAY)
         input_face = cv2.resize(input_face, (48, 48))
         input_face = histogram_equalization(input_face)
         input_face = transform(input_face).unsqueeze(0).to(device)
 
+        gender_model.setInput(blob)
+        genderPreds = gender_model.forward()
+        gender = genderPreds[0].argmax()
+
         with torch.no_grad():
             outputs = mini_xception(input_face)
             softmax = torch.nn.Softmax(dim=1)(outputs)
-        return dict(zip(EMOTION_LABELS, softmax.flatten().tolist()))
-
-
+        prediction = dict(zip(EMOTION_LABELS, softmax.flatten().tolist()))
+        prediction['Gender'] = int(gender)
+        print(prediction)
+        return prediction
     except Exception as e:
         return Response(f"Error in emotion detection: {e}", status=500)
 
@@ -134,21 +144,6 @@ def get_bottle(id: str):
         return "Bottle not found", 404
     return item.__data__
 
-
-
-async def add_bottle(emotion: str, feeling: str, passage: str, hex_id: str):
-    print(f"Generating {hex_id}")
-    clear_expired_bottle()
-    bottle = Bottle.create(
-        id=hex_id,
-        emotion=emotion,
-        feeling=feeling,
-        passage=passage,
-        img_url=await generate(f"人物感受:{feeling}, 描述:{passage}生成没有性别特征的简笔画手绘风人物涂鸦")
-    )
-    bottle.save()
-    print(f"saved bottle: {hex_id}")
-
 @app.route('/comment/<string:id>')
 def comment(id: str):
     clear_expired_bottle()
@@ -175,6 +170,7 @@ def throw():
     feeling = request.get_json().get("feeling")
     passage = request.get_json().get("passage")
     hex_id = request.get_json().get("id")
+    img_url = request.get_json().get("img_url")
     if emotion is None:
         return "Bad request", 400
     if feeling is None:
@@ -183,12 +179,22 @@ def throw():
         return "Bad request", 400
     if hex_id is None:
         return "Bad request", 400
+    if img_url is None:
+        return "Bad request", 400
     try:
         if int(hex_id, 16) > 255 or int(hex_id, 16) < 0:
             return "Bad request", 400
     except ValueError:
         return "Bad request", 400
-    task_queue.add_task(add_bottle(emotion, feeling, passage, hex_id))
+    clear_expired_bottle()
+    bottle = Bottle.create(
+        id=hex_id,
+        emotion=emotion,
+        feeling=feeling,
+        passage=passage,
+        img_url=img_url
+    )
+    bottle.save()
     return "OK"
 
 @app.teardown_appcontext

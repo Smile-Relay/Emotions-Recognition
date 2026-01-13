@@ -86,7 +86,6 @@ class FaceAlignment:
 
         # crop the face & convert to gray
         face = frame[y1:y2, x1:x2]
-        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
         return face
 
 
