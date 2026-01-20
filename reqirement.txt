@@ -1,0 +1,10 @@
+opencv-python>=4.5.5
+flask>=2.0.3
+flask-cors>=3.0.10
+torch>=1.10.0
+torchvision>=0.11.1
+peewee>=3.14.10
+scikit-image>=0.18.3
+numpy>=1.21.0
+dlib>=19.24.0
+seaborn>=0.11.2
