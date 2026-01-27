@@ -17,7 +17,6 @@ import threading
 import random
 
 from db_models import Bottle
-from vocabularies import ADJECTIVES, NOUNS, get_by_hex
 
 app = Flask(__name__)
 CORS(app, origins=["*"])
@@ -109,13 +108,6 @@ def detect():
     except Exception as e:
         return Response(f"Error in emotion detection: {e}", status=500)
 
-@app.route('/vocabularies')
-def vocabularies():
-    return {
-        "adjectives": ADJECTIVES,
-        "nouns": NOUNS
-    }
-
 @app.route('/random_vocabulary')
 def random_vocabulary():
     res = f"{random.randint(0, 255):02X}"
@@ -123,7 +115,7 @@ def random_vocabulary():
         res = f"{random.randint(0, 255):02X}"
     return {
         "id": res,
-        "vocabulary": get_by_hex(res)
+        "vocabulary": res
     }
 
 @app.route('/random_id')
