@@ -87,8 +87,7 @@ def detect():
             return Response("No face detected", status=404)
         faceBox = max(faces, key=lambda x: x[2] * x[3])
         input_face = face_alignment.frontalize_face(faceBox, frame)
-        face = frame[faceBox[1]:faceBox[3] + faceBox[1], faceBox[0]:faceBox[2] + faceBox[0]]
-        blob = cv2.dnn.blobFromImage(face, 1.0, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
+        blob = cv2.dnn.blobFromImage(input_face, 1.0, (227, 227), MODEL_MEAN_VALUES)
         input_face = cv2.cvtColor(input_face, cv2.COLOR_BGR2GRAY)
         input_face = cv2.resize(input_face, (48, 48))
         input_face = histogram_equalization(input_face)
