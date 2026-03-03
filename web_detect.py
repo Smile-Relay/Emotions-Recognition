@@ -1,3 +1,5 @@
+import asyncio
+import base64
 import sys
 from datetime import datetime, timedelta
 
@@ -15,6 +17,10 @@ from utils import histogram_equalization
 from torchvision import transforms
 import threading
 import random
+from pyppeteer import launch
+from concurrent.futures import ThreadPoolExecutor
+from tempfile import NamedTemporaryFile
+import cups
 
 from db_models import Bottle
 
@@ -38,6 +44,52 @@ face_alignment = None
 device = None
 mini_xception = None
 gender_model = None
+executor = ThreadPoolExecutor(max_workers=2)
+
+async def take_screenshot(url, selector):
+    browser = await launch(
+        headless=True,
+        handleSIGINT=False,
+        handleSIGTERM=False,
+        handleSIGHUP=False
+    )
+    page = await browser.newPage()
+    await page.setViewport({'width': 800, 'height': 1280})
+    await page.goto(url)
+    await page.waitForSelector(selector, {'visible': True})
+    await page.waitForFunction("""
+      () => {
+        const el = document.getElementById('render-complete');
+        return el && el.getAttribute('data-ready') === 'true';
+      }
+    """)
+    await page.evaluate(f"""
+            async () => {{
+                const imgs = Array.from(document.querySelectorAll('{selector} img'));
+                await Promise.all(imgs.map(img => {{
+                    if (img.complete) return;
+                    return new Promise(resolve => img.onload = resolve);
+                }}));
+            }}
+        """)
+    element = await page.querySelector('#bottle')
+    img_bytes = await element.screenshot()
+    await browser.close()
+    conn = cups.Connection()
+    printers = conn.getPrinters()
+
+    default_printer = conn.getDefault()
+    if not default_printer:
+        default_printer = list(printers.keys())[0]
+
+    with NamedTemporaryFile(suffix=".png") as f:
+        f.write(img_bytes)
+        f.flush()
+        conn.printFile(default_printer, f.name, "Bottle Print", {})
+
+def run_async_task(url, selector):
+    asyncio.run(take_screenshot(url, selector))
+
 
 def clear_expired_bottle():
     twenty_four_hours_ago = datetime.now() - timedelta(hours=24)
@@ -113,8 +165,7 @@ def random_vocabulary():
     while Bottle.select().where(Bottle.id == res).exists():
         res = f"{random.randint(0, 255):02X}"
     return {
-        "id": res,
-        "vocabulary": res
+        "id": res
     }
 
 @app.route('/random_id')
@@ -162,6 +213,7 @@ def throw():
     passage = request.get_json().get("passage")
     hex_id = request.get_json().get("id")
     img_url = request.get_json().get("img_url")
+    lang = request.get_json().get("lang")
     if emotion is None:
         return "Bad request", 400
     if feeling is None:
@@ -171,6 +223,8 @@ def throw():
     if hex_id is None:
         return "Bad request", 400
     if img_url is None:
+        return "Bad request", 400
+    if lang is None:
         return "Bad request", 400
     try:
         if int(hex_id, 16) > 255 or int(hex_id, 16) < 0:
@@ -186,6 +240,7 @@ def throw():
         img_url=img_url
     )
     bottle.save()
+    executor.submit(run_async_task, f"http://localhost:3000/{lang}/view?id={hex_id}", "#bottle")
     return "OK"
 
 @app.teardown_appcontext
