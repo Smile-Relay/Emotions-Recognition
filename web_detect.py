@@ -84,6 +84,7 @@ async def take_screenshot(url, selector):
     with NamedTemporaryFile(suffix=".png") as f:
         f.write(img_bytes)
         f.flush()
+        print("printing " + f.name)
         conn.printFile(default_printer, f.name, "Bottle Print", {})
 
 def run_async_task(url, selector):
