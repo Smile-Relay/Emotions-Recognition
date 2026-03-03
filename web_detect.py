@@ -63,6 +63,7 @@ async def take_screenshot(url, selector):
         handleSIGHUP=False,
         dumpio=True
     )
+    print("Chromium started")
     page = await browser.newPage()
     await page.setViewport({'width': 800, 'height': 1280})
     await page.goto(url)
