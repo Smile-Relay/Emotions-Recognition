@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import sys
 from datetime import datetime, timedelta
 
