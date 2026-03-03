@@ -60,7 +60,8 @@ async def take_screenshot(url, selector):
         headless=True,
         handleSIGINT=False,
         handleSIGTERM=False,
-        handleSIGHUP=False
+        handleSIGHUP=False,
+        dumpio=True
     )
     page = await browser.newPage()
     await page.setViewport({'width': 800, 'height': 1280})
