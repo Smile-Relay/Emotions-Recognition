@@ -48,20 +48,16 @@ executor = ThreadPoolExecutor(max_workers=2)
 async def take_screenshot(url, selector):
     browser = await launch(
         args=[
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
             "--disable-infobars",
-            "--disable-dev-shm-usage",
-            "--disable-session-crashed-bubble",
             "--disable-component-update",
-            "--kiosk",
             "--password-store=basic",
         ],
         headless=True,
         handleSIGINT=False,
         handleSIGTERM=False,
         handleSIGHUP=False,
-        dumpio=True
+        dumpio=True,
+        executablePath='/usr/bin/chromium'
     )
     print("Chromium started")
     page = await browser.newPage()
