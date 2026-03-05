@@ -69,16 +69,13 @@ async def take_screenshot(url, selector):
     page = await browser.newPage()
     await page.setViewport({'width': 800, 'height': 1280})
     await page.goto(url)
-    print(1)
     await page.waitForSelector(selector, {'visible': True})
-    print(2)
     await page.waitForFunction("""
       () => {
         const el = document.getElementById('render-complete');
         return el && el.getAttribute('data-ready') === 'true';
       }
     """)
-    print(3)
     await page.evaluate(f"""
             async () => {{
                 const imgs = Array.from(document.querySelectorAll('{selector} img'));
@@ -88,13 +85,9 @@ async def take_screenshot(url, selector):
                 }}));
             }}
         """)
-    print(4)
     element = await page.querySelector('#bottle')
-    print(5)
     img_bytes = await element.screenshot()
-    print(6)
     await browser.close()
-    print(7)
     conn = cups.Connection()
     printers = conn.getPrinters()
 
