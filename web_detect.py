@@ -90,8 +90,11 @@ async def take_screenshot(url, selector):
         """)
     print(4)
     element = await page.querySelector('#bottle')
+    print(5)
     img_bytes = await element.screenshot()
+    print(6)
     await browser.close()
+    print(7)
     conn = cups.Connection()
     printers = conn.getPrinters()
 
