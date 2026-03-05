@@ -33,7 +33,8 @@ genderProto = "gender_deploy.prototxt"
 genderModel = "gender_net.caffemodel"
 MODEL_MEAN_VALUES=(78.4263377603, 87.7689143744, 114.895847746)
 print_options = {
-    "media": "4x6"
+    "media": "4x6",
+    "fit-to-page": "True"
 }
 
 # 全局变量
