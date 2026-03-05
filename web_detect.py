@@ -38,6 +38,7 @@ print_options = {
     "page-right": "0",
     "page-top": "0",
     "page-bottom": "0",
+    "MediaType": "Photo"
 }
 
 # 全局变量
