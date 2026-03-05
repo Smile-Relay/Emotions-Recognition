@@ -32,6 +32,9 @@ PHOTOS_FOLDER = r'photos'
 genderProto = "gender_deploy.prototxt"
 genderModel = "gender_net.caffemodel"
 MODEL_MEAN_VALUES=(78.4263377603, 87.7689143744, 114.895847746)
+print_options = {
+    "media": "4x6"
+}
 
 # 全局变量
 emojis = {}
@@ -93,7 +96,7 @@ async def take_screenshot(url, selector):
         f.write(img_bytes)
         f.flush()
         print("printing " + f.name)
-        conn.printFile(default_printer, f.name, "Bottle Print", {})
+        conn.printFile(default_printer, f.name, "Bottle Print", print_options)
 
 def run_async_task(url, selector):
     asyncio.run(take_screenshot(url, selector))
