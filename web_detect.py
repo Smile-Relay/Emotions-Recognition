@@ -55,6 +55,7 @@ async def take_screenshot(url, selector):
             "--disable-infobars",
             "--disable-component-update",
             "--password-store=basic",
+            "--headless=new"
         ],
         headless=True,
         handleSIGINT=False,
