@@ -281,3 +281,9 @@ if __name__ == '__main__':
             if cap is not None:
                 release_camera()
         cv2.destroyAllWindows()
+"Error starting application: {e}")
+    finally:
+        with cap_lock:
+            if cap is not None:
+                release_camera()
+        cv2.destroyAllWindows()
