@@ -80,6 +80,7 @@ async def take_screenshot(url, selector):
         return el && el.getAttribute('data-ready') === 'true';
       }
     """)
+    print(111)
     await page.evaluate(f"""
             async () => {{
                 const imgs = Array.from(document.querySelectorAll('{selector} img'));
@@ -89,6 +90,7 @@ async def take_screenshot(url, selector):
                 }}));
             }}
         """)
+    print(222)
     element = await page.querySelector('#bottle')
     img_bytes = await element.screenshot()
     await browser.close()
@@ -258,7 +260,7 @@ def throw():
         img_url=img_url
     )
     bottle.save()
-    executor.submit(run_async_task, f"http://localhost:3000/{lang}/view?id={hex_id}", "#bottle")
+    executor.submit(run_async_task, f"http://localhost:3000/{lang}/print?id={hex_id}", "#bottle")
     return "OK"
 
 @app.teardown_appcontext
