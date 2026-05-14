@@ -102,7 +102,27 @@ async def take_screenshot(url, selector):
         default_printer = list(printers.keys())[0]
 
     with NamedTemporaryFile(suffix=".png") as f:
-        f.write(img_bytes)
+        import numpy as np
+        img_array = np.frombuffer(img_bytes, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_UNCHANGED)
+        h, w = img.shape[:2]
+        
+        # Add 8% margin on left and right, keep proportion
+        margin_x = int(w * 0.08) 
+        new_w = w - 2 * margin_x
+        new_h = int(new_w * h / w)
+        
+        resized_img = cv2.resize(img, (new_w, new_h))
+        canvas = np.ones((h, w, img.shape[2]), dtype=np.uint8) * 255
+        if img.shape[2] == 4:
+            canvas[:, :, 3] = 255
+            
+        margin_y = (h - new_h) // 2
+        canvas[margin_y:margin_y+new_h, margin_x:margin_x+new_w] = resized_img
+        
+        _, new_img_bytes = cv2.imencode(".png", canvas)
+        
+        f.write(new_img_bytes.tobytes())
         f.flush()
         print("printing " + f.name)
         conn.printFile(default_printer, f.name, "Bottle Print", print_options)
