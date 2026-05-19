@@ -1,146 +1,53 @@
+# Smile Relay - Emotions Recognition Backend
 
-# Real Time Emotion Recognition (mini-Xception)
+Smile Relay 的后端核心，负责实时情绪识别、数据持久化以及硬件交互（打印服务）。
 
-A Pytorch implementation of "Real-time Convolutional Neural Networks for Emotion and Gender Classification" (mini-Xception) [Paper](https://arxiv.org/pdf/1710.07557.pdf)
+## 🚀 核心功能
 
+- **实时情绪识别**：基于 Pytorch 实现的 mini-Xception 模型。
+- **人脸检测与对齐**：使用 dnn/Haar Cascade 进行人脸检测，并结合 dlib 进行对齐预处理。
+- **Web 服务**：基于 Flask 提供 API 接口，支持前端进行情绪检测请求、漂流瓶存储及查询。
+- **打印排队系统**：集成了 CUPS 打印服务，支持将情绪卡片渲染并自动打印。
+- **异步任务处理**：使用多线程处理截图和打印等耗时操作。
 
-## Demo
-![1](https://user-images.githubusercontent.com/35613645/116496324-162c3c00-a8a5-11eb-9701-414406b745d1.gif)
+## 🛠️ 安装与运行
 
-#### mini-Xception
-<img src="https://user-images.githubusercontent.com/35613645/113336812-365cef80-9327-11eb-992a-f88bf18db550.png" width="400" height="400">
+### 1. 安装依赖
 
-
-#### How to Install
-```
- $ pip3 install -r requirements.txt
- ```
- Note that it can be run on lower versions of Pytorch so replace the versions with yours
-
-#### install opencv & dnn from source (optional)
-Both opencv dnn & haar cascade are used for face detection, if you want to use haar cascade you can skip this part.
-
-install dependencies 
-```
-$ sudo apt-get install libjpeg-dev libpng-dev libtiff-dev
-$ sudo apt-get install libavcodec-dev libavformat-dev libswscale-dev
-$ sudo apt-get install libv4l-dev libxvidcore-dev libx264-dev
-$ sudo apt-get install libgtk-3-dev
-$ sudo apt-get install libatlas-base-dev gfortran
-```
-Download & install opencv with contrib modules from source
-```
-wget -O opencv.zip https://github.com/opencv/opencv/archive/4.2.0.zip
-wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.2.0.zip
-unzip opencv.zip
-unzip opencv_contrib-4.2.0.zip
-mkdir -p build && cd build
-cmake -DOPENCV_EXTRA_MODULES_PATH=../opencv_contrib-4.2.0/modules ../opencv
-cmake --build .
-```
-if you have any problems, refere to [Install opencv with dnn from source](https://docs.opencv.org/master/d7/d9f/tutorial_linux_install.html)
-
-if you **don't** want to use **dnn** modules just setup opencv with regular way
-```
-sudo apt-get install python3-opencv
+```bash
+pip3 install -r requirement.txt
 ```
 
-#### Run Camera Demo
-##### Live camera demo 
-```python
-$ python3 camera_demo.py
+*注意：如果需要使用 CUPS 打印功能，请确保系统已安装 `libcups2-dev`。*
 
-# add '--haar' option if you want to use Haar cascade detector instead of dnn opencv face detector
-$ python3 camera_demo.py --haar
+### 2. 运行 Web 服务器
+
+```bash
+python3 web_detect.py
 ```
 
-### Test 
-##### image test
-```
-# replace $PATH_TO_IMAGE with your relative(or global) path to the image 
-$ python3 camera_demo.py --image --path PATH_TO_IMAGE
-```
-##### video test
-```
-$ python3 camera_demo.py --path PATH_TO_VIDEO
+### 3. (可选) 摄像头演示
+
+```bash
+python3 camera_demo.py
 ```
 
+## 📂 项目结构
 
-#### Face Preprocessing
-- Histogram Equalization for iliumination normalization 
-- Face Alignment using dlib landmarks
-##### Demo
+- `web_detect.py`: Flask 应用核心，包含情绪识别、数据库操作和打印状态接口。
+- `model/`: mini-Xception 模型的 Pytorch 实现。
+- `face_detector/`: 人脸检测模块。
+- `face_alignment/`: 基于 dlib 的人脸对齐预处理。
+- `db_models/`: 数据库模型定义（基于 Peewee）。
+- `checkpoint/`: 预训练模型权重。
 
-![2](https://user-images.githubusercontent.com/35613645/116496346-22b09480-a8a5-11eb-9715-cefb41d221cc.gif)
+## ⚙️ 打印服务说明
 
+本项目支持通过 `cups` 进行自动化打印。
+- 后端会启动无头浏览器（Pyppeteer）对生成的漂流瓶网页进行截图。
+- 截图经过图像处理（添加边距等）后发送至系统默认打印机。
+- 前端可通过 `/print_status` 接口实时监控打印队列状态。
 
-### FER2013 Dataset
-The data consists of **48x48 pixel grayscale** images of faces. and their emotion shown in the facial expression in to one of seven categories (Angry, Disgust, Fear, Happy, Sad, Surprise, Neutral), The training set consists of **28,709 examples**. The public test set consists of **3,589 examples**.
+## 📄 许可证
 
-[Download FER2013](https://www.kaggle.com/deadskull7/fer2013)
-- create a folder called "data/" in project root
-- put the "fer2013.csv" in it
-
-
-#### Visualize dataset
-Visualize dataset examples with annotated landmarks & head pose 
-```cmd
-# add '--mode' option to determine the dataset to visualize
-$ python3 visualization.py
-```
-#### Tensorboard 
-Take a wide look on dataset examples using tensorboard
-```
-$ python3 visualization.py --tensorboard
-$ tensorboard --logdir checkpoint/tensorboard
-```
-![Screenshot 2021-04-01 20:05:42](https://user-images.githubusercontent.com/35613645/113335766-aff3de00-9325-11eb-8c07-66379e53a65d.png)
-
-
-
-#### Testing
-```
-$ python3 test.py
-```
-
-#### Training 
-```
-$ python3 train.py
-```
-#### Evaluation
-```
-$ python3 train.py --evaluate
-```
-will show the confision matrix
-
-![Screenshot 2021-04-01 20:13:14](https://user-images.githubusercontent.com/35613645/113336651-04e42400-9327-11eb-8aa1-d52d78eb0ad5.png)
-
-#### Folder structure    
-    ├── model					# model's implementation
-    ├── data					# data folder contains FER2013 dataset
-    ├── train					# train on FER2013 dataset 
-    ├── test					# test on 1 example
-    ├── face_detector			# contain the code of face detection (dnn & haar-cascade)
-    ├── face_alignment			# contain the code of face alignment using dlib landmarks
-
-
-#### Refrences
-Deep Learning on Facial Expressions Survey
-- https://arxiv.org/pdf/1804.08348.pdf
-
-ilimunation normalization (histogram / GCN / Local Norm)
-- https://www.sciencedirect.com/science/article/pii/S1877050917320860
-
-Tensorflow Implementation
-- https://github.com/oarriaga/face_classification/tree/master
-
-Inception (has some used blocks)
-- https://towardsdatascience.com/a-simple-guide-to-the-versions-of-the-inception-network-7fc52b863202
-
-Xception
-- https://towardsdatascience.com/review-xception-with-depthwise-separable-convolution-better-than-inception-v3-image-dc967dd42568
-
-Pytorch GlobalAvgPooling
-- https://paperswithcode.com/method/global-average-pooling
-
-
+基于开源情绪识别框架进行二次开发。
