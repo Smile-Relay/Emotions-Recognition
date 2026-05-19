@@ -52,9 +52,11 @@ device = None
 mini_xception = None
 gender_model = None
 executor = ThreadPoolExecutor(max_workers=2)
+printing_ids = set()
 
-async def take_screenshot(url, selector):
-    browser = await launch(
+async def take_screenshot(url, selector, hex_id):
+    try:
+        browser = await launch(
         args=[
             "--disable-infobars",
             "--disable-component-update",
@@ -126,9 +128,11 @@ async def take_screenshot(url, selector):
         f.flush()
         print("printing " + f.name)
         conn.printFile(default_printer, f.name, "Bottle Print", print_options)
+    finally:
+        printing_ids.discard(hex_id)
 
-def run_async_task(url, selector):
-    asyncio.run(take_screenshot(url, selector))
+def run_async_task(url, selector, hex_id):
+    asyncio.run(take_screenshot(url, selector, hex_id))
 
 
 def clear_expired_bottle():
@@ -248,7 +252,11 @@ def comment(id: str):
 
 @app.route("/print_status")
 def print_status():
+    hex_id = request.args.get("id")
     try:
+        if hex_id in printing_ids:
+            return jsonify({"status": "printing", "reason": "rendering"})
+        
         conn = cups.Connection()
         jobs = conn.getJobs()
         if len(jobs) == 0:
@@ -293,7 +301,8 @@ def throw():
         img_url=img_url
     )
     bottle.save()
-    executor.submit(run_async_task, f"http://localhost:3000/{lang}/print?id={hex_id}", "#bottle")
+    printing_ids.add(hex_id)
+    executor.submit(run_async_task, f"http://localhost:3000/{lang}/print?id={hex_id}", "#bottle", hex_id)
     return "OK"
 
 @app.teardown_appcontext
