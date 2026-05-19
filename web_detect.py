@@ -57,77 +57,77 @@ printing_ids = set()
 async def take_screenshot(url, selector, hex_id):
     try:
         browser = await launch(
-        args=[
-            "--disable-infobars",
-            "--disable-component-update",
-            "--password-store=basic",
-            "--headless=new",
-            "--disable-gpu"
-        ],
-        headless=True,
-        handleSIGINT=False,
-        handleSIGTERM=False,
-        handleSIGHUP=False,
-        dumpio=True,
-        executablePath='/usr/bin/chromium'
-    )
-    print("Chromium started")
-    page = await browser.newPage()
-    await page.setViewport({'width': 800, 'height': 1280})
-    await page.goto(url)
-    await page.waitForSelector(selector, {'visible': True})
-    await page.waitForFunction("""
-      () => {
-        const el = document.getElementById('render-complete');
-        return el && el.getAttribute('data-ready') === 'true';
-      }
-    """)
-    print(111)
-    await page.evaluate(f"""
-            async () => {{
-                const imgs = Array.from(document.querySelectorAll('{selector} img'));
-                await Promise.all(imgs.map(img => {{
-                    if (img.complete) return;
-                    return new Promise(resolve => img.onload = resolve);
-                }}));
-            }}
+            args=[
+                "--disable-infobars",
+                "--disable-component-update",
+                "--password-store=basic",
+                "--headless=new",
+                "--disable-gpu"
+            ],
+            headless=True,
+            handleSIGINT=False,
+            handleSIGTERM=False,
+            handleSIGHUP=False,
+            dumpio=True,
+            executablePath='/usr/bin/chromium'
+        )
+        print("Chromium started")
+        page = await browser.newPage()
+        await page.setViewport({'width': 800, 'height': 1280})
+        await page.goto(url)
+        await page.waitForSelector(selector, {'visible': True})
+        await page.waitForFunction("""
+          () => {
+            const el = document.getElementById('render-complete');
+            return el && el.getAttribute('data-ready') === 'true';
+          }
         """)
-    print(222)
-    element = await page.querySelector('#bottle')
-    img_bytes = await element.screenshot()
-    await browser.close()
-    conn = cups.Connection()
-    printers = conn.getPrinters()
+        print(111)
+        await page.evaluate(f"""
+                async () => {{
+                    const imgs = Array.from(document.querySelectorAll('{selector} img'));
+                    await Promise.all(imgs.map(img => {{
+                        if (img.complete) return;
+                        return new Promise(resolve => img.onload = resolve);
+                    }}));
+                }}
+            """)
+        print(222)
+        element = await page.querySelector('#bottle')
+        img_bytes = await element.screenshot()
+        await browser.close()
+        conn = cups.Connection()
+        printers = conn.getPrinters()
 
-    default_printer = conn.getDefault()
-    if not default_printer:
-        default_printer = list(printers.keys())[0]
+        default_printer = conn.getDefault()
+        if not default_printer:
+            default_printer = list(printers.keys())[0]
 
-    with NamedTemporaryFile(suffix=".png") as f:
-        import numpy as np
-        img_array = np.frombuffer(img_bytes, np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_UNCHANGED)
-        h, w = img.shape[:2]
-        
-        # Add 8% margin on left and right, keep proportion
-        margin_x = int(w * 0.08) 
-        new_w = w - 2 * margin_x
-        new_h = int(new_w * h / w)
-        
-        resized_img = cv2.resize(img, (new_w, new_h))
-        canvas = np.ones((h, w, img.shape[2]), dtype=np.uint8) * 255
-        if img.shape[2] == 4:
-            canvas[:, :, 3] = 255
+        with NamedTemporaryFile(suffix=".png") as f:
+            import numpy as np
+            img_array = np.frombuffer(img_bytes, np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_UNCHANGED)
+            h, w = img.shape[:2]
             
-        margin_y = (h - new_h) // 2
-        canvas[margin_y:margin_y+new_h, margin_x:margin_x+new_w] = resized_img
-        
-        _, new_img_bytes = cv2.imencode(".png", canvas)
-        
-        f.write(new_img_bytes.tobytes())
-        f.flush()
-        print("printing " + f.name)
-        conn.printFile(default_printer, f.name, "Bottle Print", print_options)
+            # Add 8% margin on left and right, keep proportion
+            margin_x = int(w * 0.08) 
+            new_w = w - 2 * margin_x
+            new_h = int(new_w * h / w)
+            
+            resized_img = cv2.resize(img, (new_w, new_h))
+            canvas = np.ones((h, w, img.shape[2]), dtype=np.uint8) * 255
+            if img.shape[2] == 4:
+                canvas[:, :, 3] = 255
+                
+            margin_y = (h - new_h) // 2
+            canvas[margin_y:margin_y+new_h, margin_x:margin_x+new_w] = resized_img
+            
+            _, new_img_bytes = cv2.imencode(".png", canvas)
+            
+            f.write(new_img_bytes.tobytes())
+            f.flush()
+            print("printing " + f.name)
+            conn.printFile(default_printer, f.name, "Bottle Print", print_options)
     finally:
         printing_ids.discard(hex_id)
 
