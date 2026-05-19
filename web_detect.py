@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import cv2
 import peewee
 import torch
-from flask import Flask, Response, request
+from flask import Flask, Response, request, jsonify
 from flask_cors import CORS
 
 from camera_init import init_camera, release_camera, read_frame
@@ -245,6 +245,19 @@ def comment(id: str):
     item.save()
     return "OK"
 
+
+@app.route("/print_status")
+def print_status():
+    try:
+        conn = cups.Connection()
+        jobs = conn.getJobs()
+        if len(jobs) == 0:
+            return jsonify({"status": "done"})
+        else:
+            return jsonify({"status": "printing", "jobs": len(jobs)})
+    except Exception as e:
+        print(f"Error checking print status: {e}")
+        return jsonify({"status": "done"}) # fallback to done on error
 
 @app.route("/throw", methods=['POST'])
 def throw():
